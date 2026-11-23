@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "servers": {
+    "flights": {
+      "book_flight": "37a38b54211eab03fa8599103b30c0e7609df37dee96eafa066ae3d2bbe1e0b5",
+      "cancel_flight_order": "ff76e79503e06fded7fb3870dd16c65c5a1dd114601a6038babac57ba635c831",
+      "get_flight_order": "c4e42d5910d546794d920fefdf127b4ed7efaaf44495d5e8436c84be55c620a0",
+      "refresh_offer": "936d5f17790de9d883c4ac257f247081438af5fa0cd2c91ab3c401055e4cf564",
+      "search_flights": "ec131b8e75b9c4ed5b306a940b34651ee023e149dfc9d4b6f72c7b80ce2e16f4"
+    },
+    "travel-sandbox": {
+      "book_car": "695fc143b52894188c93be628b07c994f9a685b5f8c9e07d5f0a82d68b35a67f",
+      "book_hotel": "60b385938061c4edaf43bd54fb60f0b373b574acfab631ef1a101b33af6cf6e7",
+      "book_transfer": "908ac0f304dee49c67483fd0871acf8efb1d0b3693e0144c222f51c549640b94",
+      "cancel_booking": "35421d31eaa35531e06d2cec30214eb6fd17272035b36df7577a758f44caba36",
+      "get_booking": "85bd5d0f8b9f2e0d49f15bc35bc5264613e05a5da51dae688bc4ed856f0056f1",
+      "search_cars": "cd6d31f64a51b728b089587f70cd8f305f9ccfbfca2b63ff9c1a821bd5bcb8a6",
+      "search_hotels": "ad7a8f81189751c17fbbd0be45480d38ae04eb354f2aafdd239b51609d26e5b2",
+      "search_transfers": "50663d5b2055b0c639058f306b20c9cdb3deab6efccb99332cf9e6ffaa028ade"
+    },
+    "trip-context": {
+      "get_weather": "545fae15db727fbf7f59443ca192da66bf934f79f5c05575279478f884daffd3",
+      "lookup_airport": "3ad76a3177ae9a4f5f069f42e6026b377775116b687a548946c709dbfdcd2284",
+      "nearby_airports": "3b6e84e463c3115b5b7ad15c378169e5f7c674e3118c15f31702fff8b53ed6f3",
+      "weather_risk": "8d7aa88ec30b5fd145656c427ec6161be9a0380d40e2d7e1ae8764ac5488d0de"
+    }
+  }
+}

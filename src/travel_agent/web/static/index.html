@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personal Travel Agent</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1f2937; background: #f3f4f6; }
+  header { display: flex; gap: 16px; align-items: baseline; padding: 12px 20px; background: #1e3a8a; color: #fff; }
+  header h1 { font-size: 18px; margin: 0; }
+  header span { font-size: 13px; opacity: .85; }
+  main { display: grid; grid-template-columns: 230px 1fr 400px; gap: 12px; padding: 12px; height: calc(100vh - 50px); }
+  aside, section { background: #fff; border-radius: 10px; padding: 14px; overflow: auto; }
+  h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin: 18px 0 8px; }
+  h3:first-child { margin-top: 0; }
+  ul.plain { list-style: none; padding: 0; margin: 0; }
+  li.trip { padding: 8px 10px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; }
+  li.trip:hover, li.trip.active { background: #e0e7ff; }
+  li.trip small, .muted { color: #6b7280; font-size: 13px; }
+  li.pref { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; }
+  #chat { display: flex; flex-direction: column; padding: 0; }
+  #log { flex: 1; overflow: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { width: fit-content; max-width: 78%; padding: 10px 14px; border-radius: 12px; }
+  .msg.user { align-self: flex-end; background: #dbeafe; }
+  .msg.assistant { background: #f3f4f6; }
+  .msg.error { background: #fee2e2; }
+  .msg p { margin: 0 0 8px; }
+  .msg p:last-child, .msg ul:last-child, .msg ol:last-child { margin-bottom: 0; }
+  .msg ul, .msg ol { margin: 0 0 8px; padding-left: 20px; }
+  .msg li { margin: 2px 0; }
+  .msg p.next { border-left: 3px solid #1e3a8a; padding-left: 8px; font-weight: 600; }
+  #activity { border-top: 1px solid #e5e7eb; padding: 8px 18px; font-size: 13px; color: #4b5563; max-height: 140px; overflow: auto; }
+  #activity:empty { display: none; }
+  form { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid #e5e7eb; }
+  input[type=text] { flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; }
+  button { padding: 8px 14px; border: 0; border-radius: 8px; background: #1e3a8a; color: #fff; cursor: pointer; font: inherit; }
+  button.secondary { background: #e5e7eb; color: #111827; }
+  button.link { background: none; color: #1e3a8a; padding: 2px 4px; font-size: 13px; }
+  button.danger { background: #b91c1c; }
+  button:disabled { opacity: .5; cursor: default; }
+  .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .card.best { border: 2px solid #1e3a8a; }
+  .card .title { display: flex; justify-content: space-between; font-weight: 600; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; color: #1e3a8a; background: #e0e7ff; border-radius: 6px; padding: 1px 6px; margin: 2px 0 6px; }
+  .row { display: grid; grid-template-columns: 70px 1fr; gap: 6px; font-size: 14px; margin: 4px 0; }
+  .row b { color: #374151; font-weight: 600; }
+  .notes { font-size: 13px; color: #4b5563; margin: 6px 0 8px; padding-left: 18px; }
+  .actions { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px; }
+  ol.steps { padding-left: 20px; margin: 0 0 10px; font-size: 14px; }
+  ol.steps li { margin: 3px 0; }
+  .booking { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+  .booking small { display: block; color: #6b7280; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Personal Travel Agent</h1>
+  <span>Sandbox mode: nothing is really booked or paid</span>
+  <span id="mode"></span>
+</header>
+<main>
+  <aside>
+    <button id="newTrip" type="button">New trip</button>
+    <h3>Your trips</h3>
+    <ul id="trips" class="plain"></ul>
+    <h3>What I remember</h3>
+    <ul id="prefs" class="plain"></ul>
+    <h3>Data sources</h3>
+    <p id="sources" class="muted"></p>
+  </aside>
+  <section id="chat">
+    <div id="log"></div>
+    <div id="activity"></div>
+    <form id="form">
+      <input id="text" type="text" autocomplete="off"
+             placeholder="Example: Plan a trip from San Francisco to New York, Dec 10 to Dec 18, 2 people, budget $2500">
+      <button id="send">Send</button>
+    </form>
+  </section>
+  <aside id="side"></aside>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let tripId = null;
+let busy = false;
+
+const AGENT = {flight: "Flight agent", hotel: "Hotel agent", car: "Car rental agent", transfer: "Transfer agent",
+               context: "Weather and airport check"};
+const KIND = {flight: "Flight", hotel: "Hotel", car: "Car", transfer: "Pickup"};
+const KIND_WORD = {flight: "flight", hotel: "hotel", car: "car", transfer: "airport pickup"};
+const STRATEGY = {best: "best overall", nonstop: "nonstop", cheapest: "cheapest", preferred: "best rated",
+                  budget: "lowest price", family: "family friendly", late_checkin: "late check-in", standard: "standard",
+                  larger: "larger cars", late_pickup: "late pickup", private: "private car"};
+const TRIP_STATUS = {planning: "Planning", plan_ready: "Plan ready", needs_input: "Waiting for you",
+                     proposed: "Options ready", booked: "Booked", rejected: "Options declined", cancelled: "Cancelled"};
+const PREF_LABEL = {priority: "Optimize for", max_stops: "Stops", cabin_class: "Cabin",
+                    preferred_airline: "Airline you booked", preferred_hotel_area: "Hotel area you booked",
+                    preferred_car_class: "Car you booked"};
+const PRIORITY = {cost: "lowest cost", time: "shortest travel time", comfort: "comfort", convenience: "convenience",
+                  balanced: "a balance"};
+
+function el(tag, text, cls) {
+  const node = document.createElement(tag);
+  if (text !== undefined && text !== null) node.textContent = text;  // never innerHTML: all text is untrusted
+  if (cls) node.className = cls;
+  return node;
+}
+function button(label, onClick, cls) {
+  const b = el("button", label, cls);
+  b.type = "button";
+  b.disabled = busy;
+  b.addEventListener("click", onClick);
+  return b;
+}
+const money = (n) => "$" + Number(n).toLocaleString(undefined,
+  {minimumFractionDigits: Math.round(Number(n) * 100) % 100 ? 2 : 0, maximumFractionDigits: 2});
+function parse(iso) {
+  const [d, t = "00:00"] = String(iso).split("T");
+  const [y, m, day] = d.split("-").map(Number);
+  const [hh, mm] = t.split(":").map(Number);
+  return new Date(y, m - 1, day, hh, mm);
+}
+const dayText = (iso) => parse(iso).toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric"});
+const timeText = (iso) => parse(iso).toLocaleTimeString("en-US", {hour: "numeric", minute: "2-digit"});
+const hourText = (h) => h % 24 === 0 ? "midnight" : h === 12 ? "noon" : `${h % 12} ${h < 12 ? "AM" : "PM"}`;
+
+// Chat messages: blank lines separate paragraphs, "- " lines are lists, "1. " lines are numbered lists.
+function renderText(container, text) {
+  let list = null;
+  for (const raw of String(text).split("\n")) {
+    const line = raw.trim();
+    if (!line) { list = null; continue; }
+    const bullet = line.match(/^(?:[-•]\s+)(.*)$/);
+    const numbered = line.match(/^\d+\.\s+(.*)$/);
+    if (bullet || numbered) {
+      const tag = numbered ? "ol" : "ul";
+      if (!list || list.tagName.toLowerCase() !== tag) { list = el(tag); container.append(list); }
+      list.append(el("li", (bullet || numbered)[1]));
+    } else {
+      list = null;
+      container.append(el("p", line, /^next steps?:/i.test(line) ? "next" : null));
+    }
+  }
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {headers: {"Content-Type": "application/json"}, ...options});
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function stream(path, body) {
+  setBusy(true);
+  $("activity").replaceChildren();
+  try {
+    const res = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      let index;
+      while ((index = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, index);
+        buffer = buffer.slice(index + 1);
+        if (line.trim()) showActivity(JSON.parse(line));
+      }
+    }
+  } finally {
+    setBusy(false);
+    await refresh();
+  }
+}
+
+function showActivity(e) {
+  if (e.type !== "progress") return;
+  let line = null;
+  if (e.event === "agent") {
+    const name = AGENT[e.agent] || e.agent;
+    if (e.status === "running") {
+      line = e.agent === "context" ? `${name}: checking`
+           : `${name}: searching (${(e.strategies || []).map((s) => STRATEGY[s] || s).join(", ")})`;
+    } else if (e.agent === "context") {
+      line = `${name}: done`;
+    } else if (e.status === "success" || e.status === "partial") {
+      line = `${name}: found ${e.count} options`;
+    } else {
+      line = `${name}: ${{no_results: "found nothing", failed: "search failed", timeout: "timed out"}[e.status] || e.status}`;
+    }
+  } else if (e.event === "tot") {
+    line = e.candidates ? `Planner: compared the combinations and kept the best ${e.candidates}` : "Planner: no combination fits yet";
+  } else if (e.event === "review") {
+    (e.notes || []).forEach((note) => $("activity").append(el("div", `Planner: ${note}`)));
+  } else if (e.event === "execute") {
+    line = e.status === "running" ? `Booking the ${KIND_WORD[e.kind]}` : `${KIND[e.kind]}: ${e.status === "booked" ? "booked" : "not booked"}`;
+  } else if (e.event === "verify") {
+    line = "Checked the bookings with the providers";
+  }
+  if (line) $("activity").append(el("div", line));
+}
+
+function setBusy(value) {
+  busy = value;
+  $("send").disabled = value;
+  document.querySelectorAll("aside button").forEach((b) => { b.disabled = value; });
+}
+
+async function refresh() {
+  await Promise.all([loadTrips(), loadPrefs()]);
+  if (!tripId) { renderMessages([]); renderSide(null); return; }
+  const t = await api(`/api/trips/${tripId}`);
+  renderMessages(t.messages);
+  renderSide(t);
+}
+
+function renderMessages(messages) {
+  const log = $("log");
+  log.replaceChildren();
+  if (!messages.length) {
+    const hello = el("div", null, "msg assistant");
+    renderText(hello, "Hi! Tell me about your trip: where you're flying from and to, your dates, and how many people are going.\n\nI'll show you my plan first, and nothing is booked until you approve.");
+    log.append(hello);
+  }
+  for (const m of messages) {
+    const bubble = el("div", null, `msg ${m.payload && m.payload.kind === "error" ? "error" : m.role}`);
+    if (m.role === "user") bubble.textContent = m.content; else renderText(bubble, m.content);
+    log.append(bubble);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+function planSteps(t) {
+  const list = el("ol", null, "steps");
+  ((t.task_plan && t.task_plan.steps) || []).forEach((s) => list.append(el("li", s)));
+  return list;
+}
+
+function renderSide(t) {
+  const side = $("side");
+  side.replaceChildren();
+  if (!t) { side.append(el("h3", "Your plan"), el("p", "Tell me about your trip to get started.", "muted")); return; }
+  if (t.awaiting === "plan_approval") {
+    side.append(el("h3", "Your plan"), planSteps(t));
+    const actions = el("div", null, "actions");
+    actions.append(button("Start search", () => decide({decision: "approve", kind: "start"})),
+                   button("Not now", () => decide({decision: "reject", kind: "start"}), "secondary"));
+    side.append(actions, el("p", "Want something different? Tell me in the chat.", "muted"));
+  } else if (t.awaiting === "approval" && t.proposal) {
+    side.append(el("h3", "Your options"));
+    t.proposal.candidates.forEach((c, i) => side.append(optionCard(c, i)));
+    const actions = el("div", null, "actions");
+    actions.append(el("span", "Want something different? Tell me in the chat.", "muted"),
+                   button("More options", () => send("more options"), "secondary"),
+                   button("None of these", () => decide({decision: "reject"}), "secondary"));
+    side.append(actions);
+  } else if (t.awaiting === "cancel_approval" && t.cancellation) {
+    side.append(el("h3", "Confirm cancellation"));
+    const box = el("div", null, "card");
+    renderText(box, t.cancellation.message.split("\n\n")[0]);
+    const actions = el("div", null, "actions");
+    actions.append(button("Yes, cancel", () => decide({decision: "approve", kind: "cancel"}), "danger"),
+                   button("No, keep it", () => decide({decision: "reject", kind: "cancel"}), "secondary"));
+    box.append(actions);
+    side.append(box);
+  } else if (t.task_plan && !t.bookings.length) {
+    side.append(el("h3", "Your plan"), planSteps(t));
+  }
+  side.append(el("h3", "Bookings"));
+  if (!t.bookings.length) { side.append(el("p", "Nothing booked yet.", "muted")); return; }
+  for (const b of t.bookings) {
+    const row = el("div", null, "booking");
+    const info = el("div");
+    info.append(el("span", `${KIND[b.kind] || b.kind}: ${b.label}`),
+                el("small", `${money(b.total_price)}, ${b.status === "confirmed" ? "confirmed" : b.status}, ref ${b.booking_ref}`));
+    row.append(info);
+    if (b.status === "confirmed") row.append(button("Cancel", () => send(`cancel my ${KIND_WORD[b.kind] || b.kind}`), "secondary"));
+    side.append(row);
+  }
+}
+
+function optionCard(c, i) {
+  const card = el("div", null, i === 0 ? "card best" : "card");
+  const title = el("div", null, "title");
+  title.append(el("span", `Option ${i + 1}`), el("span", money(c.total_price)));
+  card.append(title);
+  if (i === 0) card.append(el("span", "Recommended", "tag"));
+  const row = (label, value) => { const r = el("div", null, "row"); r.append(el("b", label), el("span", value)); card.append(r); };
+  const booked = (kind) => c.locked.includes(kind) ? " (already booked)" : "";
+  if (c.flight) {
+    const f = c.flight, out = f.outbound;
+    const stops = out.stops === 0 && (!f.inbound || f.inbound.stops === 0) ? "nonstop" : `${Math.max(out.stops, f.inbound ? f.inbound.stops : 0)} stop`;
+    let when = `${dayText(out.departure_time)}, ${timeText(out.departure_time)} to ${timeText(out.arrival_time)}`;
+    if (f.inbound) when += `; back ${dayText(f.inbound.departure_time)}, ${timeText(f.inbound.departure_time)}`;
+    row("Flight", `${f.airline} ${out.flight_number}, ${stops}, ${out.origin} to ${out.destination}. ${when}${booked("flight")}`);
+  }
+  if (c.hotel) {
+    const h = c.hotel;
+    const arrival = c.flight ? parse(c.flight.outbound.arrival_time).getHours() : 12;
+    const late = h.late_check_in && (arrival >= 22 || arrival < 5) ? ", late check-in" : "";
+    const rating = h.rating ? `, rated ${Number(h.rating).toFixed(1)}` : "";
+    row("Hotel", `${h.name}, ${h.area.replace("-", " ")} area${rating}, ${h.nights} nights${late}${booked("hotel")}`);
+  }
+  if (c.car) {
+    const car = c.car, desk = car.desk_open_hour === 0 && car.desk_close_hour === 24 ? "desk open 24 hours" : `desk open ${hourText(car.desk_open_hour)} to ${hourText(car.desk_close_hour)}`;
+    row("Car", `${car.vendor} ${car.vehicle_class}, ${desk}${booked("car")}`);
+  }
+  if (c.transfer) {
+    const tr = c.transfer;
+    row("Pickup", `${tr.vendor} ${tr.service} from ${c.flight ? c.flight.outbound.destination : "the airport"}, about ${tr.duration_minutes} minutes${booked("transfer")}`);
+  }
+  const notes = el("ul", null, "notes");
+  [...c.score.pref_reasons, ...(c.score.llm_reason ? [`AI review: ${c.score.llm_reason}`] : []), ...c.warnings].forEach((n) => notes.append(el("li", n)));
+  if (notes.childNodes.length) card.append(notes);
+  card.append(button(`Book option ${i + 1}`, () => decide({decision: "approve", candidate_id: c.candidate_id})));
+  return card;
+}
+
+async function loadTrips() {
+  const trips = await api("/api/trips");
+  $("trips").replaceChildren(...trips.map((t) => {
+    const li = el("li", null, "trip" + (t.trip_id === tripId ? " active" : ""));
+    li.append(el("div", t.title), el("small", TRIP_STATUS[t.status] || t.status));
+    li.addEventListener("click", () => { tripId = t.trip_id; refresh(); });
+    return li;
+  }));
+}
+
+async function loadPrefs() {
+  const entries = Object.entries(await api("/api/preferences"));
+  if (!entries.length) { $("prefs").replaceChildren(el("li", "Nothing yet.", "muted")); return; }
+  $("prefs").replaceChildren(...entries.map(([key, p]) => {
+    let value = p.value;
+    if (key === "priority") value = PRIORITY[value] || value;
+    if (key === "max_stops") value = value === 0 ? "nonstop only" : `up to ${value}`;
+    const li = el("li", null, "pref");
+    li.append(el("span", `${PREF_LABEL[key] || key}: ${String(value).replace(/[_-]/g, " ")}`),
+              button("Remove", async () => { await api(`/api/preferences/${encodeURIComponent(key)}`, {method: "DELETE"}); loadPrefs(); }, "link"));
+    return li;
+  }));
+}
+
+async function newTrip() {
+  tripId = (await api("/api/trips", {method: "POST"})).trip_id;
+  $("activity").replaceChildren();
+  await refresh();
+  $("text").focus();
+}
+
+async function send(text) {
+  if (!tripId) await newTrip();
+  await stream(`/api/trips/${tripId}/messages`, {text});
+}
+
+async function decide(decision) {
+  await stream(`/api/trips/${tripId}/decision`, decision);
+}
+
+$("form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = $("text").value.trim();
+  if (!text || busy) return;
+  $("text").value = "";
+  const bubble = el("div", text, "msg user");
+  $("log").append(bubble);
+  $("log").scrollTop = $("log").scrollHeight;
+  await send(text);
+});
+$("newTrip").addEventListener("click", newTrip);
+
+(async () => {
+  const s = await api("/api/status");
+  $("sources").textContent = `Flights: ${s.flights}. Hotels, cars, and airport pickups: ${s.hotels_cars}. Weather: ${s.weather}.`;
+  $("mode").textContent = s.llm ? `AI model: ${s.llm}` : "AI model: off (keyword rules only)";
+  const trips = await api("/api/trips");
+  if (trips.length && !tripId) tripId = trips[0].trip_id;
+  await refresh();
+})();
+</script>
+</body>
+</html>
